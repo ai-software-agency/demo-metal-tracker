@@ -7,6 +7,9 @@ import { Header } from "@/components/Header";
 import Index from "./pages/Index";
 import SpotPrices from "./pages/SpotPrices";
 import Futures from "./pages/Futures";
+import VulnerabilityTest from "./pages/VulnerabilityTest";
+import AdminPanel from "./pages/AdminPanel";
+import UserProfile from "./pages/UserProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +25,9 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/spot-prices" element={<SpotPrices />} />
           <Route path="/futures" element={<Futures />} />
+          <Route path="/vulnerabilities" element={<VulnerabilityTest />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/profile" element={<UserProfile />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Coins, TrendingUp } from "lucide-react";
+import { Coins, TrendingUp, Shield, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 export const Header = () => {
@@ -23,10 +23,11 @@ export const Header = () => {
           
           <nav className="flex gap-2">
             <Button
-              variant={location.pathname === "/" ? "default" : "ghost"}
+              variant={location.pathname === "/spot-prices" ? "default" : "ghost"}
               asChild
+              size="sm"
             >
-              <Link to="/" className="flex items-center gap-2">
+              <Link to="/spot-prices" className="flex items-center gap-2">
                 <Coins className="h-4 w-4" />
                 Spot Prices
               </Link>
@@ -34,10 +35,31 @@ export const Header = () => {
             <Button
               variant={location.pathname === "/futures" ? "default" : "ghost"}
               asChild
+              size="sm"
             >
               <Link to="/futures" className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 Futures
+              </Link>
+            </Button>
+            <Button
+              variant={location.pathname === "/vulnerabilities" ? "default" : "ghost"}
+              asChild
+              size="sm"
+            >
+              <Link to="/vulnerabilities" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Vulnerabilities
+              </Link>
+            </Button>
+            <Button
+              variant={location.pathname === "/admin" ? "default" : "ghost"}
+              asChild
+              size="sm"
+            >
+              <Link to="/admin" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Admin
               </Link>
             </Button>
           </nav>
