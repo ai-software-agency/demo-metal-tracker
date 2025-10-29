@@ -121,14 +121,44 @@ export const generateHistoricalData = (basePrice: number, timeframe: '7d' | '30d
   
   const days = daysMap[timeframe];
   const data = [];
-  let price = basePrice;
+  
+  // Calculate realistic starting price based on current price and timeframe
+  // Gold went from ~$2000 to ~$4019 over a year (roughly doubled)
+  // Silver went from ~$24 to ~$48 over a year (also roughly doubled)
+  const isGold = basePrice > 1000;
+  const isSilver = basePrice > 20 && basePrice < 100;
+  
+  let growthFactor;
+  if (isGold) {
+    // Gold growth patterns
+    growthFactor = days === 7 ? 0.98 : days === 30 ? 0.95 : days === 90 ? 0.85 : days === 180 ? 0.70 : 0.50;
+  } else if (isSilver) {
+    // Silver growth patterns
+    growthFactor = days === 7 ? 0.98 : days === 30 ? 0.94 : days === 90 ? 0.82 : days === 180 ? 0.68 : 0.48;
+  } else {
+    // Other metals - more moderate growth
+    growthFactor = days === 7 ? 0.99 : days === 30 ? 0.97 : days === 90 ? 0.92 : days === 180 ? 0.85 : 0.75;
+  }
+  
+  let startPrice = basePrice * growthFactor;
+  const totalGrowth = basePrice - startPrice;
   
   for (let i = days; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
     
-    // Add some realistic variation
-    price = price + (Math.random() - 0.5) * (basePrice * 0.02);
+    // Calculate progressive growth with realistic volatility
+    const progress = 1 - (i / days);
+    const trendPrice = startPrice + (totalGrowth * progress);
+    
+    // Add realistic daily volatility (1-3% swings)
+    const volatility = basePrice * 0.015;
+    const dailyVariation = (Math.random() - 0.5) * volatility;
+    
+    // Add some wave patterns for realism
+    const wavePattern = Math.sin(progress * Math.PI * 4) * (basePrice * 0.01);
+    
+    const price = trendPrice + dailyVariation + wavePattern;
     
     data.push({
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
