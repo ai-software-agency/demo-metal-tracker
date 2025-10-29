@@ -5,9 +5,6 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, UserPlus } from "lucide-react";
 
-// VULNERABILITY 1: Exposed API Key in source code
-const ADMIN_API_KEY = "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";
-
 // VULNERABILITY 2: Hardcoded admin credentials
 const ADMIN_PASSWORD = "admin123";
 
@@ -172,7 +169,6 @@ const AdminPanel = () => {
             <p className="text-sm mb-4">These should NEVER be in source code:</p>
             <div className="space-y-2 font-mono text-sm">
               <p>Admin Password: {ADMIN_PASSWORD}</p>
-              <p className="break-all">API Key: {ADMIN_API_KEY}</p>
               <p>Database URL: postgresql://admin:password123@db.example.com:5432/prod_db</p>
             </div>
           </Card>
