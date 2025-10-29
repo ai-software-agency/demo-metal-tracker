@@ -22,26 +22,26 @@ export const fetchSpotPrices = async (): Promise<MetalPrice[]> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 500));
   
-  const baseGold = 2050;
-  const baseSilver = 24.5;
-  const basePlatinum = 950;
-  const basePalladium = 1050;
+  const baseGold = 4019;
+  const baseSilver = 48.0;
+  const basePlatinum = 960;
+  const basePalladium = 920;
   
   return [
     {
       name: "Gold",
       symbol: "XAU",
-      price: getRandomVariation(baseGold, 20),
-      change: getRandomVariation(15, 10),
-      changePercent: getRandomVariation(0.7, 0.5),
+      price: getRandomVariation(baseGold, 15),
+      change: getRandomVariation(25, 15),
+      changePercent: getRandomVariation(0.6, 0.4),
       unit: "oz"
     },
     {
       name: "Silver",
       symbol: "XAG",
-      price: getRandomVariation(baseSilver, 0.5),
-      change: getRandomVariation(0.3, 0.2),
-      changePercent: getRandomVariation(1.2, 0.8),
+      price: getRandomVariation(baseSilver, 0.8),
+      change: getRandomVariation(0.6, 0.4),
+      changePercent: getRandomVariation(1.3, 0.7),
       unit: "oz"
     },
     {
@@ -55,9 +55,9 @@ export const fetchSpotPrices = async (): Promise<MetalPrice[]> => {
     {
       name: "Palladium",
       symbol: "XPD",
-      price: getRandomVariation(basePalladium, 20),
-      change: getRandomVariation(12, 15),
-      changePercent: getRandomVariation(1.1, 0.9),
+      price: getRandomVariation(basePalladium, 15),
+      change: getRandomVariation(-8, 12),
+      changePercent: getRandomVariation(-0.9, 1.3),
       unit: "oz"
     }
   ];
@@ -71,9 +71,9 @@ export const fetchFuturesPrices = async (): Promise<FuturePrice[]> => {
       name: "Gold",
       symbol: "GC",
       contract: "GC=F",
-      price: getRandomVariation(2055, 20),
-      change: getRandomVariation(18, 10),
-      changePercent: getRandomVariation(0.9, 0.5),
+      price: getRandomVariation(4025, 20),
+      change: getRandomVariation(28, 15),
+      changePercent: getRandomVariation(0.7, 0.5),
       unit: "oz",
       expiryDate: "Dec 2025"
     },
@@ -81,9 +81,9 @@ export const fetchFuturesPrices = async (): Promise<FuturePrice[]> => {
       name: "Silver",
       symbol: "SI",
       contract: "SI=F",
-      price: getRandomVariation(24.8, 0.5),
-      change: getRandomVariation(0.4, 0.2),
-      changePercent: getRandomVariation(1.6, 0.8),
+      price: getRandomVariation(48.5, 0.8),
+      change: getRandomVariation(0.7, 0.4),
+      changePercent: getRandomVariation(1.5, 0.8),
       unit: "oz",
       expiryDate: "Dec 2025"
     },
@@ -110,7 +110,16 @@ export const fetchFuturesPrices = async (): Promise<FuturePrice[]> => {
   ];
 };
 
-export const generateHistoricalData = (basePrice: number, days: number = 30) => {
+export const generateHistoricalData = (basePrice: number, timeframe: '7d' | '30d' | '3m' | '6m' | '1y') => {
+  const daysMap = {
+    '7d': 7,
+    '30d': 30,
+    '3m': 90,
+    '6m': 180,
+    '1y': 365
+  };
+  
+  const days = daysMap[timeframe];
   const data = [];
   let price = basePrice;
   

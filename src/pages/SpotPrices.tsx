@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { MetalCard } from "@/components/MetalCard";
@@ -10,11 +10,23 @@ import { useToast } from "@/hooks/use-toast";
 const SpotPrices = () => {
   const { toast } = useToast();
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [goldTimeframe, setGoldTimeframe] = useState<'7d' | '30d' | '3m' | '6m' | '1y'>('30d');
+  const [silverTimeframe, setSilverTimeframe] = useState<'7d' | '30d' | '3m' | '6m' | '1y'>('30d');
 
   const { data: prices, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['spotPrices'],
     queryFn: fetchSpotPrices,
   });
+
+  const goldData = useMemo(() => 
+    generateHistoricalData(prices?.[0]?.price || 4019, goldTimeframe),
+    [prices, goldTimeframe]
+  );
+
+  const silverData = useMemo(() => 
+    generateHistoricalData(prices?.[1]?.price || 48, silverTimeframe),
+    [prices, silverTimeframe]
+  );
 
   const handleRefresh = async () => {
     setLastUpdate(new Date());
@@ -61,12 +73,16 @@ const SpotPrices = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PriceChart 
-                data={generateHistoricalData(prices?.[0]?.price || 2050, 30)}
-                title="Gold - 30 Day Trend"
+                data={goldData}
+                title="Gold - Price Trend"
+                timeframe={goldTimeframe}
+                onTimeframeChange={setGoldTimeframe}
               />
               <PriceChart 
-                data={generateHistoricalData(prices?.[1]?.price || 24.5, 30)}
-                title="Silver - 30 Day Trend"
+                data={silverData}
+                title="Silver - Price Trend"
+                timeframe={silverTimeframe}
+                onTimeframeChange={setSilverTimeframe}
               />
             </div>
           </>
