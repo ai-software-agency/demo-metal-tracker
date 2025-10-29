@@ -19,11 +19,6 @@ export const VulnerableForm = () => {
     e.preventDefault();
     
     // VULNERABILITY 11: No input validation
-    // VULNERABILITY 12: Logging sensitive data in plaintext
-    console.log("Form submitted with data:", formData);
-    console.log("Password in plaintext:", formData.password);
-    console.log("Credit card:", formData.creditCard);
-    
     // VULNERABILITY 13: Sending sensitive data over insecure connection
     // In a real app, this would be fetch("http://...") instead of https
     
@@ -32,7 +27,7 @@ export const VulnerableForm = () => {
     
     toast({
       title: "Form Submitted",
-      description: "Check console for plaintext credentials",
+      description: "Form submitted successfully",
     });
   };
 
@@ -99,12 +94,10 @@ export const VulnerableForm = () => {
         <ul className="text-sm space-y-1 text-destructive">
           <li>✗ No input validation</li>
           <li>✗ No email format checking</li>
-          <li>✗ Passwords logged in plaintext</li>
           <li>✗ Credit card data not validated/masked</li>
           <li>✗ XSS vulnerable text areas</li>
           <li>✗ No CSRF protection</li>
           <li>✗ No rate limiting</li>
-          <li>✗ Sensitive data in console logs</li>
         </ul>
       </div>
     </Card>

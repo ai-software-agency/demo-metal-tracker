@@ -77,10 +77,6 @@ const AdminPanel = () => {
     };
     setUsers([...users, newUser]);
     
-    // VULNERABILITY 8: Logging sensitive data
-    console.log("Added new user:", newUser);
-    console.log("Admin API Key:", ADMIN_API_KEY);
-    
     setUserEmail("");
     setUserRole("");
   };

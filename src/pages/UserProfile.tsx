@@ -24,7 +24,6 @@ const UserProfile = () => {
     const user = mockDatabase[userId];
     if (user) {
       setUserData(user);
-      console.log("Loaded sensitive user data:", user); // VULNERABILITY: Logging sensitive data
       toast({
         title: "Profile Loaded",
         description: `Viewing profile for user ${userId}`,
