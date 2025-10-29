@@ -169,7 +169,6 @@ const AdminPanel = () => {
             <p className="text-sm mb-4">These should NEVER be in source code:</p>
             <div className="space-y-2 font-mono text-sm">
               <p>Admin Password: {ADMIN_PASSWORD}</p>
-              <p>Database URL: postgresql://admin:password123@db.example.com:5432/prod_db</p>
             </div>
           </Card>
         </div>
