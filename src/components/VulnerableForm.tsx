@@ -8,11 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 export const VulnerableForm = () => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
-    password: "",
     creditCard: "",
-    message: ""
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -26,17 +23,8 @@ export const VulnerableForm = () => {
   return (
     <Card className="p-6 max-w-2xl mx-auto">
       <h3 className="text-xl font-bold mb-4">⚠️ Vulnerable Contact Form</h3>
-      <p className="text-muted-foreground mb-4">This form intentionally lacks input validation.</p>
+      <p className="text-muted-foreground mb-4">This form intentionally lacks validation for two fields.</p>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Username (no validation)</label>
-          <Input
-            value={formData.username}
-            onChange={(e) => setFormData({...formData, username: e.target.value})}
-            placeholder="Enter any text, including scripts"
-          />
-        </div>
-        
         <div>
           <label className="text-sm font-medium mb-2 block">Email (no validation)</label>
           <Input
@@ -45,17 +33,7 @@ export const VulnerableForm = () => {
             placeholder="not-an-email is accepted"
           />
         </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Password (no validation)</label>
-          <Input
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-            placeholder="Will be logged to console"
-          />
-        </div>
-        
+
         <div>
           <label className="text-sm font-medium mb-2 block">Credit Card (no validation/masking)</label>
           <Input
@@ -65,27 +43,16 @@ export const VulnerableForm = () => {
           />
         </div>
         
-        <div>
-          <label className="text-sm font-medium mb-2 block">Message (no validation)</label>
-          <Textarea
-            value={formData.message}
-            onChange={(e) => setFormData({...formData, message: e.target.value})}
-            placeholder="No validation applied"
-          />
-        </div>
-        
         <Button type="submit" className="w-full">
           Submit (Insecurely)
         </Button>
       </form>
       
       <div className="mt-6 p-4 bg-destructive/10 border border-destructive rounded">
-        <h4 className="font-bold text-destructive mb-2">Input Validation Issues</h4>
+        <h4 className="font-bold text-destructive mb-2">Input Validation Issues (2)</h4>
         <ul className="text-sm space-y-1 text-destructive">
-          <li>✗ No input validation</li>
-          <li>✗ No email format checking</li>
-          <li>✗ Credit card data not validated/masked</li>
-          <li>✗ Message field accepts arbitrary input</li>
+          <li>✗ Email format not validated</li>
+          <li>✗ Credit card not validated/masked</li>
         </ul>
       </div>
     </Card>

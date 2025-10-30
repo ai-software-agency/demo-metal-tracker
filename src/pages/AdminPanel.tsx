@@ -63,7 +63,13 @@ const AdminPanel = () => {
   };
 
   const addUser = () => {
-    // Vulnerability: Missing input validation (email/role not validated)
+    // Fixed: Basic validation to remove input validation vulnerability here
+    const emailValid = /.+@.+\..+/.test(userEmail);
+    const roleValid = ["admin", "user"].includes(userRole.trim().toLowerCase());
+    if (!emailValid || !roleValid) {
+      toast({ title: "Invalid input", description: "Enter a valid email and role (admin/user)", variant: "destructive" });
+      return;
+    }
     const newUser = {
       id: users.length + 1,
       email: userEmail,
@@ -121,12 +127,12 @@ const AdminPanel = () => {
             <h3 className="text-xl font-bold mb-4">Add New User</h3>
             <div className="flex gap-4">
               <Input
-                placeholder="Email (no validation)"
+                placeholder="Email"
                 value={userEmail}
                 onChange={(e) => setUserEmail(e.target.value)}
               />
               <Input
-                placeholder="Role (no validation)"
+                placeholder="Role (admin or user)"
                 value={userRole}
                 onChange={(e) => setUserRole(e.target.value)}
               />
