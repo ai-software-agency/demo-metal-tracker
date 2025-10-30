@@ -26,9 +26,7 @@ export const VulnerableForm = () => {
   return (
     <Card className="p-6 max-w-2xl mx-auto">
       <h3 className="text-xl font-bold mb-4">⚠️ Vulnerable Contact Form</h3>
-      <p className="text-muted-foreground mb-4">
-        This form has multiple vulnerabilities: no validation, plaintext logging, no CSRF protection
-      </p>
+      <p className="text-muted-foreground mb-4">This form intentionally lacks input validation.</p>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="text-sm font-medium mb-2 block">Username (no validation)</label>
@@ -49,7 +47,7 @@ export const VulnerableForm = () => {
         </div>
         
         <div>
-          <label className="text-sm font-medium mb-2 block">Password (logged in plaintext)</label>
+          <label className="text-sm font-medium mb-2 block">Password (no validation)</label>
           <Input
             type="password"
             value={formData.password}
@@ -59,7 +57,7 @@ export const VulnerableForm = () => {
         </div>
         
         <div>
-          <label className="text-sm font-medium mb-2 block">Credit Card (no masking)</label>
+          <label className="text-sm font-medium mb-2 block">Credit Card (no validation/masking)</label>
           <Input
             value={formData.creditCard}
             onChange={(e) => setFormData({...formData, creditCard: e.target.value})}
@@ -68,11 +66,11 @@ export const VulnerableForm = () => {
         </div>
         
         <div>
-          <label className="text-sm font-medium mb-2 block">Message (XSS vulnerable)</label>
+          <label className="text-sm font-medium mb-2 block">Message (no validation)</label>
           <Textarea
             value={formData.message}
             onChange={(e) => setFormData({...formData, message: e.target.value})}
-            placeholder="Try: <script>alert('XSS')</script>"
+            placeholder="No validation applied"
           />
         </div>
         
@@ -82,14 +80,12 @@ export const VulnerableForm = () => {
       </form>
       
       <div className="mt-6 p-4 bg-destructive/10 border border-destructive rounded">
-        <h4 className="font-bold text-destructive mb-2">Vulnerabilities in this form:</h4>
+        <h4 className="font-bold text-destructive mb-2">Input Validation Issues</h4>
         <ul className="text-sm space-y-1 text-destructive">
           <li>✗ No input validation</li>
           <li>✗ No email format checking</li>
           <li>✗ Credit card data not validated/masked</li>
-          <li>✗ XSS vulnerable text areas</li>
-          <li>✗ No CSRF protection</li>
-          <li>✗ No rate limiting</li>
+          <li>✗ Message field accepts arbitrary input</li>
         </ul>
       </div>
     </Card>

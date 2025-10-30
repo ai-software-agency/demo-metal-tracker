@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, UserPlus } from "lucide-react";
 
-// VULNERABILITY 2: Hardcoded admin credentials
+// Vulnerability: Leaked secret in source code
 const ADMIN_PASSWORD = "admin123";
 
 const AdminPanel = () => {
@@ -17,7 +17,7 @@ const AdminPanel = () => {
   const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
-    // VULNERABILITY 3: Client-side authentication check using localStorage
+    // Vulnerability: Unprotected route via client-side localStorage flag
     const adminStatus = localStorage.getItem("isAdmin");
     if (adminStatus === "true") {
       setIsAdmin(true);
@@ -26,7 +26,7 @@ const AdminPanel = () => {
   }, []);
 
   const handleLogin = () => {
-    // VULNERABILITY 4: Weak authentication - hardcoded password
+    // Vulnerability: Weak authentication (hardcoded password)
     if (password === ADMIN_PASSWORD) {
       setIsAdmin(true);
       localStorage.setItem("isAdmin", "true");
@@ -45,35 +45,31 @@ const AdminPanel = () => {
   };
 
   const loadUsers = () => {
-    // VULNERABILITY 5: Insecure direct object reference - loading all user data
+    // Safe mock dataset (no PII exposed)
     const mockUsers = [
-      { id: 1, email: "john@example.com", role: "admin", ssn: "123-45-6789", creditCard: "4532-1234-5678-9012" },
-      { id: 2, email: "jane@example.com", role: "user", ssn: "987-65-4321", creditCard: "5678-9012-3456-7890" },
-      { id: 3, email: "bob@example.com", role: "user", ssn: "456-78-9012", creditCard: "9012-3456-7890-1234" }
+      { id: 1, email: "john@example.com", role: "admin" },
+      { id: 2, email: "jane@example.com", role: "user" },
+      { id: 3, email: "bob@example.com", role: "user" }
     ];
     setUsers(mockUsers);
   };
 
   const deleteUser = (userId: number) => {
-    // VULNERABILITY 6: No confirmation or validation before deletion
-    setUsers(users.filter(u => u.id !== userId));
-    toast({
-      title: "User Deleted",
-      description: `User ${userId} has been removed`,
-    });
+    // Fixed: add confirmation to avoid unintentional deletion vulnerability
+    if (confirm("Are you sure you want to delete this user?")) {
+      setUsers(users.filter(u => u.id !== userId));
+      toast({ title: "User Deleted", description: `User ${userId} has been removed` });
+    }
   };
 
   const addUser = () => {
-    // VULNERABILITY 7: No input validation or sanitization
+    // Vulnerability: Missing input validation (email/role not validated)
     const newUser = {
       id: users.length + 1,
-      email: userEmail, // No email validation
-      role: userRole,   // No role validation
-      ssn: "000-00-0000",
-      creditCard: "0000-0000-0000-0000"
+      email: userEmail,
+      role: userRole,
     };
     setUsers([...users, newUser]);
-    
     setUserEmail("");
     setUserRole("");
   };
@@ -142,15 +138,13 @@ const AdminPanel = () => {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-xl font-bold mb-4">User Database (Exposed PII)</h3>
+            <h3 className="text-xl font-bold mb-4">User Database</h3>
             <div className="space-y-4">
               {users.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-4 bg-secondary rounded-lg">
                   <div className="flex-1">
                     <p className="font-medium">{user.email}</p>
                     <p className="text-sm text-muted-foreground">Role: {user.role}</p>
-                    <p className="text-sm text-destructive">SSN: {user.ssn}</p>
-                    <p className="text-sm text-destructive">Credit Card: {user.creditCard}</p>
                   </div>
                   <Button
                     variant="destructive"
@@ -165,8 +159,8 @@ const AdminPanel = () => {
           </Card>
 
           <Card className="p-6 bg-destructive/10 border-destructive">
-            <h3 className="text-xl font-bold mb-2 text-destructive">Exposed Secrets</h3>
-            <p className="text-sm mb-4">These should NEVER be in source code:</p>
+            <h3 className="text-xl font-bold mb-2 text-destructive">Leaked Secret (for testing)</h3>
+            <p className="text-sm mb-4">Hardcoded credentials present in source code.</p>
             <div className="space-y-2 font-mono text-sm">
               <p>Admin Password: {ADMIN_PASSWORD}</p>
             </div>
