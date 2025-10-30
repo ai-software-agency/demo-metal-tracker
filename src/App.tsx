@@ -1,33 +1,29 @@
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Header } from "@/components/Header";
-import Index from "./pages/Index";
 import SpotPrices from "./pages/SpotPrices";
 import Futures from "./pages/Futures";
 import VulnerabilityTest from "./pages/VulnerabilityTest";
 import AdminPanel from "./pages/AdminPanel";
-import NotFound from "./pages/NotFound";
+import { useState } from "react";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
+type TabKey = "spot-prices" | "futures" | "vulnerabilities" | "admin";
+
+const App = () => {
+  const [tab, setTab] = useState<TabKey>("spot-prices");
+
+  return (
+    <QueryClientProvider client={queryClient}>
       <Toaster />
-      <BrowserRouter>
-        <Header />
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/spot-prices" element={<SpotPrices />} />
-          <Route path="/futures" element={<Futures />} />
-          <Route path="/vulnerabilities" element={<VulnerabilityTest />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          {/* Protected routes intentionally left unguarded for testing */}
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-  </QueryClientProvider>
-);
+      <Header currentTab={tab} onSelect={setTab} />
+      {tab === "spot-prices" && <SpotPrices />}
+      {tab === "futures" && <Futures />}
+      {tab === "vulnerabilities" && <VulnerabilityTest onNavigate={setTab} />}
+      {tab === "admin" && <AdminPanel />}
+    </QueryClientProvider>
+  );
+};
 
 export default App;
