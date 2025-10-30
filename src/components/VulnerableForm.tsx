@@ -17,14 +17,6 @@ export const VulnerableForm = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // VULNERABILITY 11: No input validation
-    // VULNERABILITY 13: Sending sensitive data over insecure connection
-    // In a real app, this would be fetch("http://...") instead of https
-    
-    // VULNERABILITY 14: No CSRF protection
-    // VULNERABILITY 15: No rate limiting
-    
     toast({
       title: "Form Submitted",
       description: "Form submitted successfully",
