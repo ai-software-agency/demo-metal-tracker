@@ -1,44 +1,69 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, UserPlus } from "lucide-react";
-
-// Vulnerability: Leaked secret in source code
-const ADMIN_PASSWORD = "admin123";
+import { useAdminCheck } from "@/hooks/useAdminCheck";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminPanel = () => {
   const { toast } = useToast();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { isAdmin, isLoading, user } = useAdminCheck();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userRole, setUserRole] = useState("");
   const [users, setUsers] = useState<any[]>([]);
+  const [isSignUp, setIsSignUp] = useState(false);
 
-  useEffect(() => {
-    // Vulnerability: Unprotected route via client-side localStorage flag
-    const adminStatus = localStorage.getItem("isAdmin");
-    if (adminStatus === "true") {
-      setIsAdmin(true);
-      loadUsers();
-    }
-  }, []);
-
-  const handleLogin = () => {
-    // Vulnerability: Weak authentication (hardcoded password)
-    if (password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      localStorage.setItem("isAdmin", "true");
+  const handleAuth = async () => {
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        
+        toast({
+          title: "Account Created",
+          description: "Please check your email to verify your account. Contact admin to get admin access.",
+        });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        
+        toast({
+          title: "Signed In",
+          description: "Checking admin privileges...",
+        });
+      }
+    } catch (error: any) {
       toast({
-        title: "Admin Access Granted",
-        description: "Welcome to the admin panel",
+        title: "Authentication Error",
+        description: error.message,
+        variant: "destructive",
       });
-      loadUsers();
-    } else {
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
       toast({
-        title: "Access Denied",
-        description: "Invalid password",
+        title: "Logged Out",
+        description: "You have been logged out successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
     }
@@ -80,23 +105,67 @@ const AdminPanel = () => {
     setUserRole("");
   };
 
-  if (!isAdmin) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="p-8 max-w-md w-full">
-          <h2 className="text-2xl font-bold mb-4 text-foreground">Admin Login</h2>
+          <p className="text-center text-muted-foreground">Loading...</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-8 max-w-md w-full">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">
+            {isSignUp ? "Sign Up" : "Admin Login"}
+          </h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Hint: The password is visible in the source code 😉
+            {isSignUp 
+              ? "Create an account. Contact admin for admin privileges." 
+              : "Sign in with your credentials to access the admin panel."}
           </p>
           <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mb-4"
+          />
+          <Input
             type="password"
-            placeholder="Admin Password"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mb-4"
           />
-          <Button onClick={handleLogin} className="w-full">
-            Login
+          <Button onClick={handleAuth} className="w-full mb-2">
+            {isSignUp ? "Sign Up" : "Sign In"}
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsSignUp(!isSignUp)} 
+            className="w-full"
+          >
+            {isSignUp ? "Already have an account? Sign In" : "Need an account? Sign Up"}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-8 max-w-md w-full">
+          <h2 className="text-2xl font-bold mb-4 text-foreground">Access Denied</h2>
+          <p className="text-muted-foreground mb-4">
+            You do not have admin privileges. Contact an administrator to request access.
+          </p>
+          <Button onClick={handleLogout} variant="destructive" className="w-full">
+            Logout
           </Button>
         </Card>
       </div>
@@ -109,14 +178,12 @@ const AdminPanel = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-3xl font-bold text-foreground">Admin Panel</h2>
-            <p className="text-muted-foreground">⚠️ Warning: This page has security vulnerabilities!</p>
+            <p className="text-muted-foreground">✅ Secure admin panel with server-side authentication</p>
+            <p className="text-sm text-muted-foreground">Logged in as: {user?.email}</p>
           </div>
           <Button 
             variant="destructive"
-            onClick={() => {
-              setIsAdmin(false);
-              localStorage.removeItem("isAdmin");
-            }}
+            onClick={handleLogout}
           >
             Logout
           </Button>
@@ -164,11 +231,14 @@ const AdminPanel = () => {
             </div>
           </Card>
 
-          <Card className="p-6 bg-destructive/10 border-destructive">
-            <h3 className="text-xl font-bold mb-2 text-destructive">Leaked Secret (for testing)</h3>
-            <p className="text-sm mb-4">Hardcoded credentials present in source code.</p>
-            <div className="space-y-2 font-mono text-sm">
-              <p>Admin Password: {ADMIN_PASSWORD}</p>
+          <Card className="p-6 bg-green-500/10 border-green-500">
+            <h3 className="text-xl font-bold mb-2 text-green-600">Security Status</h3>
+            <p className="text-sm mb-4">This admin panel now uses secure server-side authentication.</p>
+            <div className="space-y-2 text-sm">
+              <p>✅ No hardcoded credentials</p>
+              <p>✅ Server-side role verification</p>
+              <p>✅ Protected by authentication</p>
+              <p>✅ Role-based access control (RBAC)</p>
             </div>
           </Card>
         </div>
