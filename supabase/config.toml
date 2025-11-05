@@ -2,3 +2,18 @@ project_id = "vomwumieybrtufbfkwhw"
 
 [auth]
 enabled = true
+
+[functions.check-admin]
+verify_jwt = false
+
+[functions.auth-login]
+verify_jwt = false
+
+[functions.auth-logout]
+verify_jwt = false
+
+[functions.auth-session]
+verify_jwt = false
+
+[functions.auth-signup]
+verify_jwt = false

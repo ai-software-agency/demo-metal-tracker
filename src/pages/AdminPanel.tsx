@@ -4,12 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, UserPlus } from "lucide-react";
-import { useAdminCheck } from "@/hooks/useAdminCheck";
-import { supabase } from "@/integrations/supabase/client";
+import { useSecureAuth } from "@/hooks/useSecureAuth";
 
 const AdminPanel = () => {
   const { toast } = useToast();
-  const { isAdmin, isLoading, user } = useAdminCheck();
+  const { user, isAdmin, isLoading, login, signup, logout } = useSecureAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -18,55 +17,49 @@ const AdminPanel = () => {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAuth = async () => {
-    try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        
+    if (isSignUp) {
+      const result = await signup(email, password);
+      
+      if (result.success) {
         toast({
           title: "Account Created",
-          description: "Please check your email to verify your account. Contact admin to get admin access.",
+          description: result.message || "Please sign in. Contact admin to get admin access.",
         });
+        setIsSignUp(false);
+        setPassword("");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        toast({
+          title: "Signup Error",
+          description: result.error,
+          variant: "destructive",
         });
-        
-        if (error) throw error;
-        
+      }
+    } else {
+      const result = await login(email, password);
+      
+      if (result.success) {
         toast({
           title: "Signed In",
           description: "Checking admin privileges...",
         });
+        setEmail("");
+        setPassword("");
+      } else {
+        toast({
+          title: "Login Error",
+          description: result.error,
+          variant: "destructive",
+        });
       }
-    } catch (error: any) {
-      toast({
-        title: "Authentication Error",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   };
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      toast({
-        title: "Logged Out",
-        description: "You have been logged out successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
+    await logout();
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully",
+    });
   };
 
   const loadUsers = () => {
@@ -233,11 +226,12 @@ const AdminPanel = () => {
 
           <Card className="p-6 bg-green-500/10 border-green-500">
             <h3 className="text-xl font-bold mb-2 text-green-600">Security Status</h3>
-            <p className="text-sm mb-4">This admin panel now uses secure server-side authentication.</p>
+            <p className="text-sm mb-4">This admin panel uses secure server-side authentication with HttpOnly cookies.</p>
             <div className="space-y-2 text-sm">
               <p>✅ No hardcoded credentials</p>
               <p>✅ Server-side role verification</p>
-              <p>✅ Protected by authentication</p>
+              <p>✅ HttpOnly cookie session storage (XSS protection)</p>
+              <p>✅ No tokens in localStorage</p>
               <p>✅ Role-based access control (RBAC)</p>
             </div>
           </Card>
