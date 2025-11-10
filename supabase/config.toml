@@ -4,7 +4,7 @@ project_id = "vomwumieybrtufbfkwhw"
 enabled = true
 
 [functions.check-admin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.auth-login]
 verify_jwt = false
