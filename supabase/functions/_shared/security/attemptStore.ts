@@ -3,6 +3,22 @@
  * Supports both in-memory (for tests/local) and PostgreSQL (production)
  */
 
+/**
+ * Error thrown when rate limit storage backend is unavailable
+ * This causes fail-closed behavior - blocking requests rather than allowing unlimited attempts
+ */
+export class RateLimitBackendUnavailable extends Error {
+  public readonly operation: string;
+  public override readonly cause?: any;
+  
+  constructor(message: string, operation: string, cause?: any) {
+    super(message);
+    this.name = 'RateLimitBackendUnavailable';
+    this.operation = operation;
+    this.cause = cause;
+  }
+}
+
 export interface AttemptStorage {
   incrementCounter(scope: string, key: string, windowSec: number): Promise<number>;
   getCounter(scope: string, key: string, windowSec: number): Promise<number>;
@@ -136,11 +152,31 @@ export class PostgresStore implements AttemptStorage {
       });
 
     if (error) {
-      console.error('Error incrementing auth attempt:', error);
-      return 0;
+      console.error('SECURITY: Rate limit backend error on incrementCounter', {
+        scope,
+        keyPrefix: key.slice(0, 8),
+        error: error.message,
+      });
+      // FAIL CLOSED: Throw error to block request rather than allow unlimited attempts
+      throw new RateLimitBackendUnavailable(
+        'Rate limit storage unavailable during increment',
+        'incrementCounter',
+        error
+      );
     }
 
-    return data || 0;
+    if (data === null || data === undefined) {
+      console.error('SECURITY: Rate limit backend returned no data on incrementCounter', {
+        scope,
+        keyPrefix: key.slice(0, 8),
+      });
+      throw new RateLimitBackendUnavailable(
+        'Rate limit storage returned no data during increment',
+        'incrementCounter'
+      );
+    }
+
+    return data;
   }
 
   async getCounter(scope: string, key: string, windowSec: number): Promise<number> {
@@ -155,7 +191,28 @@ export class PostgresStore implements AttemptStorage {
       .gte('expires_at', now)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      // PGRST116 is "not found" which is acceptable (means no attempts yet)
+      if (error.code === 'PGRST116') {
+        return 0;
+      }
+      
+      console.error('SECURITY: Rate limit backend error on getCounter', {
+        scope,
+        keyPrefix: key.slice(0, 8),
+        error: error.message,
+        code: error.code,
+      });
+      // FAIL CLOSED: Throw error to block request rather than allow unlimited attempts
+      throw new RateLimitBackendUnavailable(
+        'Rate limit storage unavailable during counter check',
+        'getCounter',
+        error
+      );
+    }
+
+    if (!data) {
+      // No data but no error means no attempts yet (legitimate 0)
       return 0;
     }
 
@@ -165,7 +222,7 @@ export class PostgresStore implements AttemptStorage {
   async setLock(scope: string, key: string, untilEpochMs: number): Promise<void> {
     const lockUntil = new Date(untilEpochMs).toISOString();
 
-    await this.supabaseClient
+    const { error } = await this.supabaseClient
       .from('auth_attempts')
       .upsert({
         scope,
@@ -177,6 +234,20 @@ export class PostgresStore implements AttemptStorage {
       }, {
         onConflict: 'scope,key,window_seconds',
       });
+
+    if (error) {
+      console.error('SECURITY: Rate limit backend error on setLock', {
+        scope,
+        keyPrefix: key.slice(0, 8),
+        error: error.message,
+      });
+      // FAIL CLOSED: Throw error to ensure lockout is recorded
+      throw new RateLimitBackendUnavailable(
+        'Rate limit storage unavailable during lock set',
+        'setLock',
+        error
+      );
+    }
   }
 
   async getLock(scope: string, key: string): Promise<number | null> {
@@ -191,7 +262,27 @@ export class PostgresStore implements AttemptStorage {
       .gte('lock_until', now)
       .single();
 
-    if (error || !data || !data.lock_until) {
+    if (error) {
+      // PGRST116 is "not found" which is acceptable (means no lock)
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      
+      console.error('SECURITY: Rate limit backend error on getLock', {
+        scope,
+        keyPrefix: key.slice(0, 8),
+        error: error.message,
+        code: error.code,
+      });
+      // FAIL CLOSED: Throw error - treat as if account is locked
+      throw new RateLimitBackendUnavailable(
+        'Rate limit storage unavailable during lock check',
+        'getLock',
+        error
+      );
+    }
+
+    if (!data || !data.lock_until) {
       return null;
     }
 
@@ -209,13 +300,45 @@ export class PostgresStore implements AttemptStorage {
 
 /**
  * Factory function to create storage based on environment
+ * SECURITY: Prevents silent in-memory fallback in production
  */
 export function createAttemptStorage(supabaseClient?: any): AttemptStorage {
   const backend = Deno.env.get('RATE_LIMIT_BACKEND') || 'memory';
+  const env = Deno.env.get('DENO_ENV') || Deno.env.get('ENV') || 'development';
+  const allowMemoryBackend = Deno.env.get('ALLOW_MEMORY_RATE_LIMIT') === 'true';
   
-  if (backend === 'postgres' && supabaseClient) {
+  const isProduction = env === 'production';
+  
+  if (backend === 'postgres') {
+    if (!supabaseClient) {
+      console.error('SECURITY: PostgreSQL rate limit backend requested but no client provided');
+      throw new RateLimitBackendUnavailable(
+        'Rate limit backend misconfigured: postgres requested but no client available',
+        'createAttemptStorage'
+      );
+    }
+    console.log('Rate limiter: Using PostgreSQL backend');
     return new PostgresStore(supabaseClient);
   }
   
-  return new MemoryStore();
+  if (backend === 'memory') {
+    if (isProduction && !allowMemoryBackend) {
+      console.error('SECURITY: Memory rate limit backend not allowed in production environment');
+      throw new RateLimitBackendUnavailable(
+        'Rate limit backend misconfigured: memory backend not allowed in production',
+        'createAttemptStorage'
+      );
+    }
+    console.warn('Rate limiter: Using in-memory backend (not recommended for production)', {
+      env,
+      explicit: allowMemoryBackend,
+    });
+    return new MemoryStore();
+  }
+  
+  console.error('SECURITY: Unknown rate limit backend specified', { backend });
+  throw new RateLimitBackendUnavailable(
+    `Rate limit backend misconfigured: unknown backend '${backend}'`,
+    'createAttemptStorage'
+  );
 }

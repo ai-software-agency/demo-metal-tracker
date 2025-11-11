@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.78.0';
 import { createRateLimiter } from '../_shared/security/rateLimiter.ts';
+import { RateLimitBackendUnavailable } from '../_shared/security/attemptStore.ts';
 import { getClientIp } from '../_shared/util/ip.ts';
 import { normalizeIdentifier } from '../_shared/util/normalize.ts';
 import { preflight, withCors } from '../_shared/util/cors.ts';
@@ -33,8 +34,38 @@ export async function handleLogin(req: Request): Promise<Response> {
     const ip = getClientIp(req);
     const identifierKey = await normalizeIdentifier(email);
 
-    // Check rate limits before attempting authentication
-    const verdict = await rateLimiter.checkAndConsume(ip, identifierKey);
+    // SECURITY: Check rate limits before attempting authentication
+    // CRITICAL: This happens BEFORE password verification to prevent brute force
+    let verdict;
+    try {
+      verdict = await rateLimiter.checkAndConsume(ip, identifierKey);
+    } catch (error) {
+      // FAIL CLOSED: If rate limit storage fails, block the request
+      if (error instanceof RateLimitBackendUnavailable) {
+        console.error('SECURITY: Rate limit backend unavailable, blocking login attempt', {
+          ip,
+          idPrefix: identifierKey.slice(0, 8),
+          operation: error.operation,
+        });
+        
+        const response = new Response(
+          JSON.stringify({ 
+            error: 'Service temporarily unavailable. Please try again later.' 
+          }),
+          {
+            status: 503,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': '60',
+            },
+          }
+        );
+        return withCors(req, response);
+      }
+      // Re-throw unexpected errors
+      throw error;
+    }
+
     if (!verdict.allowed) {
       console.log('Login blocked by rate limiter', {
         ip,
@@ -63,7 +94,16 @@ export async function handleLogin(req: Request): Promise<Response> {
 
     if (error) {
       // Record failure for rate limiting
-      await rateLimiter.recordFailure(ip, identifierKey);
+      try {
+        await rateLimiter.recordFailure(ip, identifierKey);
+      } catch (storageError) {
+        // Log but don't block response if failure recording fails
+        console.error('SECURITY: Failed to record login failure', {
+          ip,
+          idPrefix: identifierKey.slice(0, 8),
+          error: storageError instanceof Error ? storageError.message : 'unknown',
+        });
+      }
 
       console.log('Login failed', {
         ip,
@@ -81,7 +121,16 @@ export async function handleLogin(req: Request): Promise<Response> {
     }
 
     if (!data.session) {
-      await rateLimiter.recordFailure(ip, identifierKey);
+      try {
+        await rateLimiter.recordFailure(ip, identifierKey);
+      } catch (storageError) {
+        console.error('SECURITY: Failed to record login failure', {
+          ip,
+          idPrefix: identifierKey.slice(0, 8),
+          error: storageError instanceof Error ? storageError.message : 'unknown',
+        });
+      }
+      
       return withCors(
         req,
         new Response(
@@ -92,7 +141,16 @@ export async function handleLogin(req: Request): Promise<Response> {
     }
 
     // Record successful login - reset rate limit counters
-    await rateLimiter.recordSuccess(identifierKey);
+    try {
+      await rateLimiter.recordSuccess(identifierKey);
+    } catch (storageError) {
+      // Log but don't block successful login if reset fails
+      console.error('SECURITY: Failed to reset rate limit counters on success', {
+        userId: data.user.id,
+        idPrefix: identifierKey.slice(0, 8),
+        error: storageError instanceof Error ? storageError.message : 'unknown',
+      });
+    }
 
     // Set HttpOnly cookie with the session
     // Security: HttpOnly prevents JavaScript access, Secure ensures HTTPS-only, SameSite prevents CSRF
