@@ -2,12 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.78.0';
 import { createRateLimiter } from '../_shared/security/rateLimiter.ts';
 import { getClientIp } from '../_shared/util/ip.ts';
 import { normalizeIdentifier } from '../_shared/util/normalize.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Credentials': 'true',
-};
+import { preflight, withCors } from '../_shared/util/cors.ts';
 
 /**
  * Handle login request with rate limiting and secure session management
@@ -25,9 +20,12 @@ export async function handleLogin(req: Request): Promise<Response> {
     const { email, password } = await req.json();
 
     if (!email || !password) {
-      return new Response(
-        JSON.stringify({ error: 'Email and password are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return withCors(
+        req,
+        new Response(
+          JSON.stringify({ error: 'Email and password are required' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        )
       );
     }
 
@@ -44,17 +42,17 @@ export async function handleLogin(req: Request): Promise<Response> {
         reason: verdict.reason,
       });
 
-      return new Response(
+      const response = new Response(
         JSON.stringify({ error: 'Too many attempts. Please try again later.' }),
         {
           status: 429,
           headers: {
-            ...corsHeaders,
             'Content-Type': 'application/json',
             'Retry-After': String(verdict.retryAfterSeconds || 60),
           },
         }
       );
+      return withCors(req, response);
     }
 
     // Attempt authentication
@@ -73,17 +71,23 @@ export async function handleLogin(req: Request): Promise<Response> {
       });
 
       // Return generic error message to prevent enumeration
-      return new Response(
-        JSON.stringify({ error: 'Invalid email or password' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return withCors(
+        req,
+        new Response(
+          JSON.stringify({ error: 'Invalid email or password' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
       );
     }
 
     if (!data.session) {
       await rateLimiter.recordFailure(ip, identifierKey);
-      return new Response(
-        JSON.stringify({ error: 'Invalid email or password' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return withCors(
+        req,
+        new Response(
+          JSON.stringify({ error: 'Invalid email or password' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
       );
     }
 
@@ -104,35 +108,40 @@ export async function handleLogin(req: Request): Promise<Response> {
       idPrefix: identifierKey.slice(0, 8),
     });
 
-    return new Response(
-      JSON.stringify({ 
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-        },
-        success: true 
-      }),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-          'Set-Cookie': cookieHeader,
-        },
-      }
+    return withCors(
+      req,
+      new Response(
+        JSON.stringify({ 
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+          },
+          success: true 
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Set-Cookie': cookieHeader,
+          },
+        }
+      )
     );
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return withCors(
+      req,
+      new Response(
+        JSON.stringify({ error: 'Internal server error' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
     );
   }
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return preflight(req);
   }
 
   return handleLogin(req);

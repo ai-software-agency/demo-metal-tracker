@@ -13,6 +13,7 @@ interface CorsConfig {
   allowedOrigins: string[];
   allowedMethods: string[];
   allowedHeaders: string[];
+  allowCredentials: boolean;
 }
 
 /**
@@ -37,7 +38,8 @@ function getConfig(): CorsConfig {
   return {
     allowedOrigins,
     allowedMethods: ['POST', 'OPTIONS'],
-    allowedHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type'],
+    allowedHeaders: ['content-type'],
+    allowCredentials: true,
   };
 }
 
@@ -74,15 +76,21 @@ export function preflight(req: Request): Response {
   
   const config = getConfig();
   
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': config.allowedMethods.join(', '),
+    'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
+    'Access-Control-Max-Age': '86400', // 24 hours
+    'Vary': 'Origin',
+  };
+
+  if (config.allowCredentials) {
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': config.allowedMethods.join(', '),
-      'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
-      'Access-Control-Max-Age': '86400', // 24 hours
-      'Vary': 'Origin',
-    },
+    headers,
   });
 }
 
@@ -98,9 +106,14 @@ export function withCors(req: Request, response: Response): Response {
   }
   
   // Clone the response to add headers
+  const config = getConfig();
   const headers = new Headers(response.headers);
   headers.set('Access-Control-Allow-Origin', origin);
   headers.set('Vary', 'Origin');
+  
+  if (config.allowCredentials) {
+    headers.set('Access-Control-Allow-Credentials', 'true');
+  }
   
   return new Response(response.body, {
     status: response.status,
