@@ -3,6 +3,7 @@ import { createRateLimiter } from '../_shared/security/rateLimiter.ts';
 import { normalizeIdentifier } from '../_shared/util/normalize.ts';
 import { getClientIp } from '../_shared/util/ip.ts';
 import { preflight, withCors } from '../_shared/util/cors.ts';
+import { normalizePassword, validatePassword } from '../_shared/passwordPolicy.ts';
 
 /**
  * Sleep utility for timing attack mitigation
@@ -83,10 +84,17 @@ export async function handleSignup(req: Request): Promise<Response> {
       ));
     }
 
-    // Validate password length (8-256 characters for security)
-    if (password.length < 8 || password.length > 256) {
+    // Normalize and validate password against security policy
+    const normalizedPassword = normalizePassword(password);
+    const passwordValidation = validatePassword(normalizedPassword);
+    
+    if (!passwordValidation.ok) {
       return withCors(req, new Response(
-        JSON.stringify({ success: false, message: 'Invalid signup request.' }),
+        JSON.stringify({ 
+          success: false, 
+          message: passwordValidation.message || 'Password does not meet security requirements.',
+          codes: passwordValidation.codes || []
+        }),
         { status: 400, headers: commonHeaders }
       ));
     }
@@ -128,10 +136,10 @@ export async function handleSignup(req: Request): Promise<Response> {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
     );
 
-    // Attempt signup
+    // Attempt signup with normalized password
     const { data, error } = await supabaseClient.auth.signUp({
       email: normalizedEmail,
-      password,
+      password: normalizedPassword,
     });
 
     // Security: Record success to reset failure counters
