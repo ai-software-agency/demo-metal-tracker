@@ -164,10 +164,69 @@ function isPrivateOrReserved(ip: string): boolean {
 }
 
 /**
- * Parse CIDR notation and check if an IP falls within the range
- * Supports both IPv4 and IPv6 CIDR blocks
+ * Expand compressed IPv6 address to full 8-hextet form
+ * Handles :: compression and ensures all hextets are present
  */
-function isIpInCidr(ip: string, cidr: string): boolean {
+function expandIPv6(ip: string): string[] {
+  // Handle v4-mapped IPv6 (::ffff:x.x.x.x)
+  const v4MappedMatch = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedMatch && isValidIPv4(v4MappedMatch[1])) {
+    const v4Parts = v4MappedMatch[1].split('.');
+    const v4Hex = v4Parts.map(p => parseInt(p, 10).toString(16).padStart(2, '0')).join('');
+    ip = `::ffff:${v4Hex.slice(0, 4)}:${v4Hex.slice(4)}`;
+  }
+  
+  // Remove zone index if present (e.g., %eth0)
+  ip = ip.replace(/%.*$/, '');
+  
+  // Split on ::
+  if (ip.includes('::')) {
+    const [left, right] = ip.split('::');
+    const leftGroups = left ? left.split(':') : [];
+    const rightGroups = right ? right.split(':') : [];
+    const missingGroups = 8 - leftGroups.length - rightGroups.length;
+    
+    const expanded = [
+      ...leftGroups,
+      ...Array(missingGroups).fill('0'),
+      ...rightGroups
+    ];
+    
+    return expanded.map(g => g.padStart(4, '0'));
+  }
+  
+  // No compression, just pad each hextet
+  return ip.split(':').map(g => g.padStart(4, '0'));
+}
+
+/**
+ * Parse IPv6 address to 128-bit BigInt
+ * Supports compressed notation (::) and v4-mapped addresses
+ */
+function parseIPv6ToBigInt(ip: string): bigint {
+  const hextets = expandIPv6(ip);
+  
+  if (hextets.length !== 8) {
+    throw new Error(`Invalid IPv6 address: ${ip}`);
+  }
+  
+  let result = 0n;
+  for (let i = 0; i < 8; i++) {
+    const hextet = parseInt(hextets[i], 16);
+    if (isNaN(hextet) || hextet < 0 || hextet > 0xFFFF) {
+      throw new Error(`Invalid hextet in IPv6 address: ${hextets[i]}`);
+    }
+    result = (result << 16n) | BigInt(hextet);
+  }
+  
+  return result;
+}
+
+/**
+ * Parse CIDR notation and check if an IP falls within the range
+ * Supports both IPv4 and IPv6 CIDR blocks with bit-accurate matching
+ */
+export function isIpInCidr(ip: string, cidr: string): boolean {
   const [network, prefixLenStr] = cidr.split('/');
   const prefixLen = parseInt(prefixLenStr, 10);
   
@@ -189,27 +248,26 @@ function isIpInCidr(ip: string, cidr: string): boolean {
     return (ipBits & mask) === (networkBits & mask);
   }
   
-  // IPv6 CIDR matching (simplified - expands addresses and compares prefix)
+  // IPv6 CIDR matching - bit-accurate comparison
   if (isValidIPv6(ip) && isValidIPv6(network)) {
     if (prefixLen < 0 || prefixLen > 128) return false;
     
-    // For simplicity, compare string prefixes for common IPv6 forms
-    // A full implementation would normalize and bit-compare
-    // This covers most practical cases where CIDRs are properly formatted
-    const ipNorm = ip.toLowerCase().replace(/^0+/, '').replace(/:0+/g, ':');
-    const netNorm = network.toLowerCase().replace(/^0+/, '').replace(/:0+/g, ':');
-    
-    // Simple prefix match for common cases
-    // Note: This is a simplified check. Production systems should use a full IPv6 library
-    if (prefixLen % 16 === 0) {
-      const hexGroups = prefixLen / 16;
-      const ipGroups = ipNorm.split(':').slice(0, hexGroups);
-      const netGroups = netNorm.split(':').slice(0, hexGroups);
-      return ipGroups.join(':') === netGroups.join(':');
+    try {
+      const ipNum = parseIPv6ToBigInt(ip);
+      const networkNum = parseIPv6ToBigInt(network);
+      
+      // Create bit mask for the prefix length
+      // For prefix length p, mask has p high bits set to 1, rest to 0
+      const mask = prefixLen === 0 
+        ? 0n 
+        : ((1n << 128n) - 1n) << (128n - BigInt(prefixLen));
+      
+      // Compare masked values
+      return (ipNum & mask) === (networkNum & mask);
+    } catch (e) {
+      // If parsing fails, return false
+      return false;
     }
-    
-    // For non-aligned prefixes, fall back to conservative match
-    return ipNorm.startsWith(netNorm.split(':').slice(0, Math.floor(prefixLen / 16)).join(':'));
   }
   
   return false;
