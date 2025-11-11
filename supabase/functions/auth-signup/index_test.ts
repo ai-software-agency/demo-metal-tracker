@@ -92,8 +92,14 @@ Deno.test("Security - Enumeration: Response is normalized regardless of email ex
     ip: '192.0.2.2',
   });
 
+  // Measure timing to ensure jitter is applied
+  const start1 = Date.now();
   const response1 = await handleSignup(req1);
+  const time1 = Date.now() - start1;
+  
+  const start2 = Date.now();
   const response2 = await handleSignup(req2);
+  const time2 = Date.now() - start2;
 
   // Both should return 202 (not 201) to prevent enumeration
   assertEquals(response1.status, 202);
@@ -107,6 +113,11 @@ Deno.test("Security - Enumeration: Response is normalized regardless of email ex
   assertEquals(body2.success, true);
   assertEquals(body1.message, body2.message);
   assertEquals(body1.message, 'If the email is eligible, you will receive a message with next steps.');
+  
+  // SECURITY: Verify timing jitter is applied (should be 80-120ms added)
+  // Both responses should take at least 80ms due to artificial delay
+  assertEquals(time1 >= 80, true, `Response 1 should include jitter delay (${time1}ms)`);
+  assertEquals(time2 >= 80, true, `Response 2 should include jitter delay (${time2}ms)`);
 });
 
 Deno.test("Functionality - Valid signup request returns 202", async () => {

@@ -5,6 +5,14 @@ import { getClientIp } from '../_shared/util/ip.ts';
 import { preflight, withCors } from '../_shared/util/cors.ts';
 
 /**
+ * Sleep utility for timing attack mitigation
+ * Adds artificial delay to prevent timing-based user enumeration
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Validate email format using basic RFC-compliant regex
  */
 function isValidEmail(email: string): boolean {
@@ -132,8 +140,18 @@ export async function handleSignup(req: Request): Promise<Response> {
       console.log('Signup successful for user:', data.user?.id);
     } else {
       // Log error for monitoring but don't expose details to client
-      console.error('Signup error:', error.message);
+      console.error('Signup error:', { 
+        message: error.message, 
+        name: error.name, 
+        status: error.status 
+      });
     }
+
+    // SECURITY: Add artificial delay to prevent timing-based enumeration
+    // Randomized jitter (80-120ms) makes it harder to distinguish success vs. failure
+    // based on response time alone
+    const jitterMs = 80 + Math.floor(Math.random() * 40);
+    await sleep(jitterMs);
 
     // CRITICAL: Normalize response to prevent user enumeration
     // Always return 202 with generic message regardless of success/failure
