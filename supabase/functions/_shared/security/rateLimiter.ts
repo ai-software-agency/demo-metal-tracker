@@ -30,8 +30,10 @@ export class RateLimiter {
 
   /**
    * Check if request is allowed and consume a slot if it is
+   * @param ip Client IP address (null if untrusted)
+   * @param identifierKey Normalized identifier for the user
    */
-  async checkAndConsume(ip: string, identifierKey: string): Promise<RateLimitVerdict> {
+  async checkAndConsume(ip: string | null, identifierKey: string): Promise<RateLimitVerdict> {
     // Check lockout first
     const lockUntil = await this.storage.getLock('id', identifierKey);
     if (lockUntil) {
@@ -47,25 +49,27 @@ export class RateLimiter {
       };
     }
 
-    // Check per-IP limits
-    const ipCount60s = await this.storage.getCounter('ip', ip, IP_WINDOW_60S);
-    if (ipCount60s >= IP_LIMIT_PER_MINUTE) {
-      console.log('Rate limit: IP throttled (60s window)', { ip, count: ipCount60s });
-      return {
-        allowed: false,
-        reason: 'ip',
-        retryAfterSeconds: 60,
-      };
-    }
+    // Check per-IP limits (only if IP is trusted)
+    if (ip !== null) {
+      const ipCount60s = await this.storage.getCounter('ip', ip, IP_WINDOW_60S);
+      if (ipCount60s >= IP_LIMIT_PER_MINUTE) {
+        console.log('Rate limit: IP throttled (60s window)', { ip, count: ipCount60s });
+        return {
+          allowed: false,
+          reason: 'ip',
+          retryAfterSeconds: 60,
+        };
+      }
 
-    const ipCount3600s = await this.storage.getCounter('ip', ip, IP_WINDOW_3600S);
-    if (ipCount3600s >= IP_LIMIT_PER_HOUR) {
-      console.log('Rate limit: IP throttled (3600s window)', { ip, count: ipCount3600s });
-      return {
-        allowed: false,
-        reason: 'ip',
-        retryAfterSeconds: 600, // 10 minutes
-      };
+      const ipCount3600s = await this.storage.getCounter('ip', ip, IP_WINDOW_3600S);
+      if (ipCount3600s >= IP_LIMIT_PER_HOUR) {
+        console.log('Rate limit: IP throttled (3600s window)', { ip, count: ipCount3600s });
+        return {
+          allowed: false,
+          reason: 'ip',
+          retryAfterSeconds: 600, // 10 minutes
+        };
+      }
     }
 
     // Check per-identifier soft limit with exponential backoff
@@ -87,9 +91,11 @@ export class RateLimiter {
       };
     }
 
-    // Consume slots for both IP and identifier
-    await this.storage.incrementCounter('ip', ip, IP_WINDOW_60S);
-    await this.storage.incrementCounter('ip', ip, IP_WINDOW_3600S);
+    // Consume slots for both IP (if available) and identifier
+    if (ip !== null) {
+      await this.storage.incrementCounter('ip', ip, IP_WINDOW_60S);
+      await this.storage.incrementCounter('ip', ip, IP_WINDOW_3600S);
+    }
     await this.storage.incrementCounter('id', identifierKey, ID_WINDOW_60S);
 
     return { allowed: true };
@@ -98,8 +104,10 @@ export class RateLimiter {
   /**
    * Record a failed authentication attempt
    * Increments failure counters and applies lockout if threshold exceeded
+   * @param ip Client IP address (null if untrusted)
+   * @param identifierKey Normalized identifier for the user
    */
-  async recordFailure(ip: string, identifierKey: string): Promise<void> {
+  async recordFailure(ip: string | null, identifierKey: string): Promise<void> {
     // Track consecutive failures for lockout
     const consecutiveFailures = await this.storage.incrementCounter(
       'id',
