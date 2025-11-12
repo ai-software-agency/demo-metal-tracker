@@ -78,45 +78,35 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Security: Read session from HttpOnly cookie, not accessible to JavaScript
-    const cookieHeader = req.headers.get('Cookie') || '';
-    const sessionCookie = cookieHeader
-      .split(';')
-      .find(c => c.trim().startsWith('sb-session='));
-
-    if (!sessionCookie) {
+    // Security: Require Authorization header with valid JWT
+    const authHeader = req.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ authenticated: false, user: null }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const sessionData = JSON.parse(
-      decodeURIComponent(sessionCookie.split('=')[1])
-    );
-
+    // Create Supabase client with the Authorization header
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: { headers: { Authorization: authHeader } },
+      }
     );
 
-    // Verify the session is still valid
-    const { data: { user }, error } = await supabaseClient.auth.getUser(
-      sessionData.access_token
-    );
+    // Verify the user is authenticated via JWT
+    const { data: { user }, error } = await supabaseClient.auth.getUser();
 
     if (error || !user) {
-      // Clear invalid session cookie
-      const clearCookie = 'sb-session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
-      
       return new Response(
-        JSON.stringify({ authenticated: false, user: null }),
+        JSON.stringify({ error: 'Unauthorized' }),
         {
-          status: 200,
+          status: 401,
           headers: {
             ...corsHeaders,
             'Content-Type': 'application/json',
-            'Set-Cookie': clearCookie,
           },
         }
       );
@@ -142,7 +132,8 @@ Deno.serve(async (req) => {
 
     if (hasAdminRole) {
       // Parse JWT claims to check MFA status
-      const claims = parseJwtClaims(sessionData.access_token);
+      const token = authHeader.replace('Bearer ', '');
+      const claims = parseJwtClaims(token);
       const mfaVerified = isMfaVerified(claims, minAal);
       
       if (requireMfa && !mfaVerified) {
