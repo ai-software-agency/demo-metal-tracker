@@ -1,10 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.78.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Credentials': 'true',
-};
+import { preflight, withCors } from '../_shared/util/cors.ts';
 
 /**
  * Parse JWT payload without verification (signature already verified by getUser)
@@ -73,17 +68,21 @@ function readEnvNumber(key: string, defaultValue: number): number {
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight with origin validation
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return preflight(req);
   }
 
   try {
     // Security: Require Authorization header with valid JWT
     const authHeader = req.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return withCors(
+        req,
+        new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
       );
     }
 
@@ -100,15 +99,17 @@ Deno.serve(async (req) => {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
 
     if (error || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
+      return withCors(
+        req,
+        new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          {
+            status: 401,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        )
       );
     }
 
@@ -138,30 +139,29 @@ Deno.serve(async (req) => {
       
       if (requireMfa && !mfaVerified) {
         // Admin role present but MFA not verified - require step-up authentication
-        console.warn(`Admin access attempt without MFA: user_id=${user.id}, email=${user.email}`);
+        console.warn(`Admin access attempt without MFA: user_id=${user.id}`);
         mfaRequired = true;
         adminEligible = true;
         isAdmin = false;
         
-        return new Response(
-          JSON.stringify({
-            authenticated: true,
-            user: {
-              id: user.id,
-              email: user.email,
-            },
-            isAdmin: false,
-            mfaRequired: true,
-            adminEligible: true,
-          }),
-          {
-            status: 401,
-            headers: {
-              ...corsHeaders,
-              'Content-Type': 'application/json',
-              'WWW-Authenticate': 'MFA realm="admin", error="mfa_required"',
-            },
-          }
+        return withCors(
+          req,
+          new Response(
+            JSON.stringify({
+              authenticated: true,
+              userId: user.id,
+              isAdmin: false,
+              mfaRequired: true,
+              adminEligible: true,
+            }),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'WWW-Authenticate': 'MFA realm="admin", error="mfa_required"',
+              },
+            }
+          )
         );
       }
       
@@ -169,28 +169,30 @@ Deno.serve(async (req) => {
       isAdmin = true;
     }
 
-    return new Response(
-      JSON.stringify({
-        authenticated: true,
-        user: {
-          id: user.id,
-          email: user.email,
-        },
-        isAdmin,
-      }),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
+    return withCors(
+      req,
+      new Response(
+        JSON.stringify({
+          authenticated: true,
+          userId: user.id,
+          isAdmin,
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
     );
   } catch (error) {
     console.error('Session check error:', error);
-    return new Response(
-      JSON.stringify({ authenticated: false, user: null }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return withCors(
+      req,
+      new Response(
+        JSON.stringify({ authenticated: false }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
     );
   }
 });
