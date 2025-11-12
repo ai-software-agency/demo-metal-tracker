@@ -126,9 +126,9 @@ export async function handleRequest(req: Request): Promise<Response> {
       });
     }
     
-    // SECURITY: Only allow content-type header (no authorization, apikey, etc.)
+    // SECURITY: Allow minimal headers for logout (content-type, CSRF token, requested-with)
     const requestedHeaders = req.headers.get('Access-Control-Request-Headers');
-    const allowedHeaders = ['content-type'];
+    const allowedHeaders = ['content-type', 'x-csrf-token', 'x-requested-with'];
     
     if (!areRequestedHeadersAllowed(requestedHeaders, allowedHeaders)) {
       return new Response('Forbidden', { 
@@ -166,9 +166,33 @@ export async function handleRequest(req: Request): Promise<Response> {
     );
   }
 
-  // SECURITY: Validate origin for actual requests (if Origin header present)
-  if (origin && !isOriginAllowed(origin, allowedOrigins)) {
-    console.warn('SECURITY: Blocked POST from disallowed origin', { origin });
+  // SECURITY: Strict origin/referrer enforcement for POST (mandatory)
+  let derivedOrigin = origin;
+  
+  // If no Origin header, try to derive from Referer (for non-CORS requests)
+  if (!derivedOrigin) {
+    const referer = req.headers.get('referer');
+    if (referer) {
+      try {
+        derivedOrigin = new URL(referer).origin;
+      } catch (e) {
+        console.warn('SECURITY: Malformed Referer header', { referer });
+        return new Response(
+          JSON.stringify({ error: 'Forbidden' }),
+          { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
+  }
+  
+  // SECURITY: Reject if no origin/referer or if not in allowlist
+  if (!derivedOrigin || !isOriginAllowed(derivedOrigin, allowedOrigins)) {
+    console.warn('SECURITY: Blocked POST from disallowed or missing origin', { 
+      origin: derivedOrigin || 'none' 
+    });
     return new Response(
       JSON.stringify({ error: 'Forbidden' }),
       { 
@@ -181,15 +205,43 @@ export async function handleRequest(req: Request): Promise<Response> {
   // Build CORS headers for response (only if origin is allowed)
   const responseCorsHeaders = origin && isOriginAllowed(origin, allowedOrigins)
     ? buildCorsHeaders(origin, {
-        allowCredentials: true, // Logout uses HttpOnly cookies
-        allowedHeaders: ['content-type'],
+        allowCredentials: true, // Logout uses HttpOnly cookies and CSRF tokens
+        allowedHeaders: ['content-type', 'x-csrf-token', 'x-requested-with'],
         allowedMethods: ['POST'],
       })
     : {};
 
+  // SECURITY: CSRF protection - double-submit cookie pattern
+  // Extract CSRF token from cookie
+  const cookieHeader = req.headers.get('cookie') || '';
+  const csrfCookieMatch = cookieHeader.match(/(?:^|; )sb-csrf=([^;]+)/);
+  const csrfCookie = csrfCookieMatch ? csrfCookieMatch[1] : null;
+  
+  // Extract CSRF token from header
+  const csrfHeader = req.headers.get('X-CSRF-Token');
+  
+  // SECURITY: Require matching CSRF tokens
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    console.warn('SECURITY: CSRF token validation failed', { 
+      hasCookie: !!csrfCookie,
+      hasHeader: !!csrfHeader,
+      match: csrfCookie === csrfHeader
+    });
+    return new Response(
+      JSON.stringify({ error: 'Forbidden' }),
+      { 
+        status: 403,
+        headers: { 
+          ...responseCorsHeaders,
+          'Content-Type': 'application/json' 
+        }
+      }
+    );
+  }
+
   try {
     // Extract session token from cookie to invalidate it server-side
-    const cookieHeader = req.headers.get('cookie') || '';
+    // Note: cookieHeader already extracted above for CSRF validation
     const sessionMatch = cookieHeader.match(/sb-session=([^;]+)/);
     
     if (sessionMatch) {
@@ -225,9 +277,10 @@ export async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Clear the HttpOnly session cookie
-    // Security: Setting Max-Age=0 immediately expires the cookie
-    const clearCookieHeader = 'sb-session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
+    // Clear the HttpOnly session cookie and CSRF token
+    // Security: Setting Max-Age=0 immediately expires the cookies
+    const clearSessionCookie = 'sb-session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
+    const clearCsrfCookie = 'sb-csrf=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
 
     console.log('Logout successful - session cookie cleared');
 
@@ -238,7 +291,7 @@ export async function handleRequest(req: Request): Promise<Response> {
         headers: {
           ...responseCorsHeaders,
           'Content-Type': 'application/json',
-          'Set-Cookie': clearCookieHeader,
+          'Set-Cookie': [clearSessionCookie, clearCsrfCookie].join(', '),
         },
       }
     );
