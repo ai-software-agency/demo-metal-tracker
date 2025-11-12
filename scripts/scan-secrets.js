@@ -40,6 +40,7 @@ const IGNORE_PATTERNS = [
   '.git',
   'dist',
   'dist-ssr',
+  '.env',                // Lovable Cloud auto-managed - contains real values by design
   '.env.example',        // Explicitly allowed - contains placeholders
   'scan-secrets.js',     // This script itself
   'safeEnv.test.ts',     // Test files with synthetic tokens
