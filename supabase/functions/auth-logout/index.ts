@@ -151,6 +151,21 @@ export async function handleRequest(req: Request): Promise<Response> {
     });
   }
 
+  // SECURITY: Enforce POST-only for logout (prevent CSRF via GET)
+  if (req.method !== 'POST') {
+    console.warn('SECURITY: Blocked non-POST request to logout', { method: req.method });
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { 
+        status: 405,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Allow': 'POST'
+        }
+      }
+    );
+  }
+
   // SECURITY: Validate origin for actual requests (if Origin header present)
   if (origin && !isOriginAllowed(origin, allowedOrigins)) {
     console.warn('SECURITY: Blocked POST from disallowed origin', { origin });
