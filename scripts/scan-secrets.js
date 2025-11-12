@@ -8,7 +8,12 @@
  * - Supabase URLs with project references
  * - Other credential patterns
  * 
- * Usage: node scripts/scan-secrets.js
+ * IMPORTANT: For Lovable Cloud projects:
+ * - The .env file is auto-managed by Lovable and contains real credentials by design
+ * - Runtime validation in src/lib/safeEnv.ts ensures only anon keys are used client-side
+ * - This scanner ignores .env but checks all other files for accidental exposure
+ * 
+ * Usage: npm run scan:secrets
  * Returns exit code 1 if secrets are found, 0 otherwise
  */
 
@@ -142,7 +147,8 @@ class SecretsScanner {
 
   report() {
     if (this.findings.length === 0) {
-      console.log('✅ No secrets detected in tracked files\n');
+      console.log('✅ No secrets detected in tracked files');
+      console.log('ℹ️  Note: .env is auto-managed by Lovable Cloud and excluded from scanning\n');
       return 0;
     }
 
