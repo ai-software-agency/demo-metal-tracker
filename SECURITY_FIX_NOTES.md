@@ -46,8 +46,8 @@ console.log('localStorage keys:', localKeys); // Should be: []
 const sessionKeys = Object.keys(sessionStorage).filter(k => k.includes('sb-') || k.includes('auth-token'));
 console.log('sessionStorage keys:', sessionKeys); // Should be: []
 
-// Verify tokens are NOT accessible
-console.log('Auth token in localStorage:', localStorage.getItem('sb-vomwumieybrtufbfkwhw-auth-token')); // Should be: null
+// Verify tokens are NOT accessible (replace PROJECT_ID with your actual project ID)
+console.log('Auth token in localStorage:', localStorage.getItem('sb-PROJECT_ID-auth-token')); // Should be: null
 ```
 
 **Expected Result**: No Supabase auth tokens should be found in localStorage or sessionStorage.

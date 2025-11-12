@@ -60,6 +60,47 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Environment Variables & Security
+
+This project uses **Lovable Cloud**, which automatically manages backend configuration including Supabase credentials.
+
+### For Lovable Cloud Projects (Current Setup)
+
+- `.env` file is **auto-generated and managed** by Lovable Cloud
+- Credentials are automatically provided in the Lovable development environment
+- No manual configuration needed when using Lovable
+
+### For Self-Hosted Deployments
+
+If you're deploying outside of Lovable:
+
+1. Copy `.env.example` to `.env` in your local environment
+2. Replace placeholder values with your actual Supabase credentials:
+   ```
+   VITE_SUPABASE_PROJECT_ID="your-project-id"
+   VITE_SUPABASE_PUBLISHABLE_KEY="your-anon-key"
+   VITE_SUPABASE_URL="https://your-project.supabase.co"
+   ```
+3. **Never commit** `.env` to version control (it's in `.gitignore`)
+4. For CI/CD, provide environment variables through your deployment platform
+
+### Security Notes
+
+- The Supabase anon/publishable key is safe to expose in client-side code
+- It's protected by Row Level Security (RLS) policies in your database
+- Always review and test your RLS policies before deploying
+- For additional security, this project includes:
+  - Secret scanning via GitHub Actions (`.github/workflows/secret-scan.yml`)
+  - Runtime environment validation (`src/lib/safeEnv.ts`)
+  - Secure session management with in-memory storage
+
+### Key Rotation
+
+If you need to rotate your Supabase keys:
+
+1. **Lovable Cloud**: Managed automatically by the platform
+2. **Self-hosted**: Generate new keys in your Supabase dashboard and update environment variables
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/59ca1c9e-f6b1-49a0-b1b0-d6ca146ba837) and click on Share -> Publish.
