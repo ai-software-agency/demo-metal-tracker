@@ -89,10 +89,15 @@ If you're deploying outside of Lovable:
 - The Supabase anon/publishable key is safe to expose in client-side code
 - It's protected by Row Level Security (RLS) policies in your database
 - Always review and test your RLS policies before deploying
-- For additional security, this project includes:
-  - Secret scanning via GitHub Actions (`.github/workflows/secret-scan.yml`)
-  - Runtime environment validation (`src/lib/safeEnv.ts`)
-  - Secure session management with in-memory storage
+- This project includes runtime environment validation (`src/lib/safeEnv.ts`)
+- Secure session management uses in-memory storage to prevent XSS attacks
+
+### Optional: Secret Scanning
+
+For additional security in production repositories, consider adding secret scanning:
+- **TruffleHog** (free, open-source): [trufflesecurity/trufflehog](https://github.com/trufflesecurity/trufflehog)
+- **GitGuardian** (free tier available): [GitGuardian GitHub Action](https://github.com/GitGuardian/ggshield-action)
+- **git-secrets** (free, AWS tool): [awslabs/git-secrets](https://github.com/awslabs/git-secrets)
 
 ### Key Rotation
 
