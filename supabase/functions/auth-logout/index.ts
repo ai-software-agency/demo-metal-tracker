@@ -97,6 +97,63 @@ function buildCorsHeaders(
 }
 
 /**
+ * SECURITY: Validate Authorization header format and content
+ * 
+ * Ensures:
+ * - Bearer scheme present
+ * - Token contains only valid JWT characters (A-Za-z0-9-_.)
+ * - No control characters (CR/LF/TAB) that could enable header injection
+ * - Reasonable length bounds (20-4096 chars)
+ * 
+ * @returns { valid: boolean, token?: string, error?: string }
+ */
+function validateAuthorizationHeader(authHeader: string | null): {
+  valid: boolean;
+  token?: string;
+  error?: string;
+} {
+  if (!authHeader) {
+    return { valid: false, error: 'Authorization header required' };
+  }
+  
+  // Must start with "Bearer " (case-insensitive)
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return { valid: false, error: 'Authorization must use Bearer scheme' };
+  }
+  
+  // Extract token part
+  const token = authHeader.slice(7).trim();
+  
+  // SECURITY: Reject any control characters (CR, LF, TAB, etc.) to prevent header injection
+  // Check for ASCII control characters (< 0x20) and CR/LF specifically
+  if (/[\r\n\t\f\v\0-\x1F]/.test(authHeader)) {
+    console.warn('SECURITY: Blocked Authorization with control characters');
+    return { valid: false, error: 'Invalid Authorization header format' };
+  }
+  
+  // Length validation: JWT tokens are typically 100-2000 chars
+  // Allow 20-4096 to be permissive but prevent abuse
+  if (token.length < 20 || token.length > 4096) {
+    return { valid: false, error: 'Invalid token length' };
+  }
+  
+  // SECURITY: JWT tokens should only contain base64url characters and dots
+  // Pattern: header.payload.signature where each part is [A-Za-z0-9_-]+
+  if (!/^[A-Za-z0-9_\-\.]+$/.test(token)) {
+    console.warn('SECURITY: Blocked Authorization with invalid characters');
+    return { valid: false, error: 'Invalid token format' };
+  }
+  
+  // Ensure proper JWT structure (three parts separated by dots)
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return { valid: false, error: 'Invalid JWT structure' };
+  }
+  
+  return { valid: true, token };
+}
+
+/**
  * Main request handler with secure CORS validation
  */
 export async function handleRequest(req: Request): Promise<Response> {
@@ -126,9 +183,9 @@ export async function handleRequest(req: Request): Promise<Response> {
       });
     }
     
-    // SECURITY: Allow minimal headers for logout (content-type, CSRF token, requested-with)
+    // SECURITY: Allow minimal headers for logout (authorization, content-type)
     const requestedHeaders = req.headers.get('Access-Control-Request-Headers');
-    const allowedHeaders = ['content-type', 'x-csrf-token', 'x-requested-with'];
+    const allowedHeaders = ['authorization', 'content-type', 'x-csrf-token', 'x-requested-with'];
     
     if (!areRequestedHeadersAllowed(requestedHeaders, allowedHeaders)) {
       return new Response('Forbidden', { 
@@ -139,7 +196,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     
     // Return successful preflight response
     const corsHeaders = buildCorsHeaders(origin!, {
-      allowCredentials: true, // Logout uses HttpOnly cookies
+      allowCredentials: false, // No longer using cookies for authentication
       allowedHeaders,
       allowedMethods: ['POST'],
       isPreflight: true,
@@ -205,32 +262,30 @@ export async function handleRequest(req: Request): Promise<Response> {
   // Build CORS headers for response (only if origin is allowed)
   const responseCorsHeaders = origin && isOriginAllowed(origin, allowedOrigins)
     ? buildCorsHeaders(origin, {
-        allowCredentials: true, // Logout uses HttpOnly cookies and CSRF tokens
-        allowedHeaders: ['content-type', 'x-csrf-token', 'x-requested-with'],
+        allowCredentials: false, // No longer using cookies for authentication
+        allowedHeaders: ['authorization', 'content-type', 'x-csrf-token', 'x-requested-with'],
         allowedMethods: ['POST'],
       })
     : {};
 
-  // SECURITY: CSRF protection - double-submit cookie pattern
-  // Extract CSRF token from cookie
-  const cookieHeader = req.headers.get('cookie') || '';
-  const csrfCookieMatch = cookieHeader.match(/(?:^|; )sb-csrf=([^;]+)/);
-  const csrfCookie = csrfCookieMatch ? csrfCookieMatch[1] : null;
+  // SECURITY: Validate Authorization header (required for authenticated logout)
+  // DO NOT source Authorization from cookies - this prevents header injection attacks
+  // where an attacker could use this endpoint as a proxy to revoke arbitrary tokens
+  const authHeader = req.headers.get('Authorization');
+  const authValidation = validateAuthorizationHeader(authHeader);
   
-  // Extract CSRF token from header
-  const csrfHeader = req.headers.get('X-CSRF-Token');
-  
-  // SECURITY: Require matching CSRF tokens
-  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
-    console.warn('SECURITY: CSRF token validation failed', { 
-      hasCookie: !!csrfCookie,
-      hasHeader: !!csrfHeader,
-      match: csrfCookie === csrfHeader
+  if (!authValidation.valid) {
+    console.warn('SECURITY: Invalid or missing Authorization header', {
+      error: authValidation.error,
+      hasHeader: !!authHeader,
     });
     return new Response(
-      JSON.stringify({ error: 'Forbidden' }),
+      JSON.stringify({ 
+        error: 'Unauthorized',
+        message: authValidation.error 
+      }),
       { 
-        status: 403,
+        status: 401,
         headers: { 
           ...responseCorsHeaders,
           'Content-Type': 'application/json' 
@@ -240,59 +295,111 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 
   try {
-    // Extract session token from cookie to invalidate it server-side
-    // Note: cookieHeader already extracted above for CSRF validation
-    const sessionMatch = cookieHeader.match(/sb-session=([^;]+)/);
-    
-    if (sessionMatch) {
-      try {
-        const sessionData = JSON.parse(decodeURIComponent(sessionMatch[1]));
-        
-        // Create Supabase client with the user's access token
-        const supabaseClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-          {
-            global: {
-              headers: {
-                Authorization: `Bearer ${sessionData.access_token}`,
-              },
-            },
-          }
-        );
-
-        // Invalidate the session server-side in Supabase Auth
-        // This revokes the access and refresh tokens
-        const { error } = await supabaseClient.auth.signOut();
-        
-        if (error) {
-          console.error('Supabase signOut error:', error);
-          // Continue with cookie clearing even if signOut fails
-        } else {
-          console.log('Session invalidated server-side');
-        }
-      } catch (parseError) {
-        console.error('Error parsing session cookie:', parseError);
-        // Continue with cookie clearing even if parsing fails
+    // SECURITY: Create Supabase client with validated Bearer token
+    // This binds the logout to the authenticated user's own session only
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            // Use the sanitized, validated Authorization header
+            Authorization: `Bearer ${authValidation.token}`,
+          },
+        },
       }
+    );
+    
+    // SECURITY: Authenticate the caller before allowing signOut
+    // This ensures we only revoke the caller's own token, not an arbitrary value
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    
+    if (userError || !userData?.user) {
+      console.warn('SECURITY: Logout attempted with invalid token', {
+        error: userError?.message,
+        hasUser: !!userData?.user,
+      });
+      return new Response(
+        JSON.stringify({ 
+          error: 'Unauthorized',
+          message: 'Invalid or expired token' 
+        }),
+        { 
+          status: 401,
+          headers: { 
+            ...responseCorsHeaders,
+            'Content-Type': 'application/json' 
+          }
+        }
+      );
     }
 
-    // Clear the HttpOnly session cookie and CSRF token
-    // Security: Setting Max-Age=0 immediately expires the cookies
-    const clearSessionCookie = 'sb-session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
-    const clearCsrfCookie = 'sb-csrf=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
+    // SECURITY: Only revoke the authenticated user's own session
+    // This prevents the endpoint from being used as a token revocation proxy
+    const { error: signOutError } = await supabaseClient.auth.signOut();
+    
+    if (signOutError) {
+      console.error('Supabase signOut error:', {
+        userId: userData.user.id,
+        error: signOutError.message,
+      });
+      // Return error but don't expose internal details
+      return new Response(
+        JSON.stringify({ error: 'Logout failed' }),
+        { 
+          status: 500,
+          headers: { 
+            ...responseCorsHeaders,
+            'Content-Type': 'application/json' 
+          }
+        }
+      );
+    }
 
-    console.log('Logout successful - session cookie cleared');
+    console.log('Session invalidated server-side', {
+      userId: userData.user.id,
+      email: userData.user.email,
+    });
+
+    // SECURITY: Clear auth cookies using separate Set-Cookie headers
+    // Do not concatenate with commas - use headers.append for multiple cookies
+    const responseHeaders = new Headers({
+      ...responseCorsHeaders,
+      'Content-Type': 'application/json',
+    });
+    
+    // Clear session cookie with secure attributes
+    responseHeaders.append(
+      'Set-Cookie',
+      'sb-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+    );
+    
+    // Clear CSRF cookie with secure attributes
+    responseHeaders.append(
+      'Set-Cookie',
+      'sb-csrf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+    );
+    
+    // Clear any other auth-related cookies your app might use
+    responseHeaders.append(
+      'Set-Cookie',
+      'sb-access-token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+    );
+    responseHeaders.append(
+      'Set-Cookie',
+      'sb-refresh-token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+    );
+
+    console.log('Logout successful - session revoked and cookies cleared');
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ 
+        success: true,
+        message: 'Logged out successfully' 
+      }),
       {
         status: 200,
-        headers: {
-          ...responseCorsHeaders,
-          'Content-Type': 'application/json',
-          'Set-Cookie': [clearSessionCookie, clearCsrfCookie].join(', '),
-        },
+        headers: responseHeaders,
       }
     );
   } catch (error) {
