@@ -5,10 +5,11 @@ import { useAuth } from "@/auth/AuthContext";
 type TabKey = "spot-prices" | "futures" | "vulnerabilities" | "admin";
 
 export const Header = ({ currentTab, onSelect }: { currentTab: TabKey; onSelect: (tab: TabKey) => void }) => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading, user } = useAuth();
   
-  // Only show admin tab to authenticated admin users
-  const canViewAdmin = isAuthenticated && isAdmin;
+  // SECURITY: Only show admin tab to authenticated admin users
+  // This prevents unauthorized users from seeing or accessing admin features
+  const canViewAdmin = isAuthenticated && isAdmin && !isLoading;
 
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -46,7 +47,19 @@ export const Header = ({ currentTab, onSelect }: { currentTab: TabKey; onSelect:
               </div>
             </Button>
             {canViewAdmin && (
-              <Button variant={currentTab === "admin" ? "default" : "ghost"} size="sm" onClick={() => onSelect("admin")}>
+              <Button 
+                variant={currentTab === "admin" ? "default" : "ghost"} 
+                size="sm" 
+                onClick={() => {
+                  // SECURITY: Double-check authorization before navigation
+                  // Defense-in-depth: verify admin status even though button is conditionally rendered
+                  if (isAdmin && isAuthenticated) {
+                    onSelect("admin");
+                  }
+                }}
+                data-testid="nav-admin"
+                aria-label="Admin panel navigation"
+              >
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Admin
