@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+# SECURITY: Pre-commit hook to prevent committing secrets
+# This hook runs Secretlint to scan staged files for leaked credentials
+
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔒 Running secret scan on staged files..."
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  echo "✓ No files staged, skipping secret scan"
+  exit 0
+fi
+
+# Run Secretlint on staged files
+npx secretlint $STAGED_FILES
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ SECRET DETECTED! Commit blocked."
+  echo ""
+  echo "Secrets or sensitive data found in your staged files."
+  echo "Please remove sensitive information before committing."
+  echo ""
+  echo "If this is a false positive, you can:"
+  echo "1. Add an exception to .secretlintrc.json"
+  echo "2. Use git commit --no-verify (NOT recommended)"
+  echo ""
+  exit 1
+fi
+
+echo "✓ Secret scan passed"
+exit 0
