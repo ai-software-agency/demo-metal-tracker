@@ -50,7 +50,54 @@ The `VITE_*` prefix means Vite **embeds these values in the browser bundle**:
 
 ---
 
-## 🔐 Fix #2: In-Memory Session Storage
+## 🔐 Fix #2: Header Injection Prevention (auth-logout)
+
+### Issue: Authorization Header Injection via Cookie Parsing
+The `auth-logout` edge function was vulnerable to header injection attacks where an attacker could:
+- Use the endpoint as an authorization header proxy
+- Revoke arbitrary tokens by forging `sb-session` cookies
+- Potentially inject malicious headers via CRLF sequences
+
+### Resolution: Strict Authorization Validation and Authentication
+
+**Changes Implemented:**
+
+1. **Removed Cookie-Based Authorization**
+   - No longer parses `sb-session` cookie to construct `Authorization` header
+   - Requires explicit `Authorization` header with Bearer token
+
+2. **Strict Header Validation** (`validateAuthorizationHeader`)
+   - Rejects missing/empty headers → 401
+   - Enforces Bearer scheme (case-insensitive)
+   - Blocks control characters (CR/LF/TAB/null bytes) → 400
+   - Validates token length (20-4096 chars) → 400
+   - Validates JWT character set (`[A-Za-z0-9-_.]` only) → 400
+   - Validates JWT structure (exactly 3 dot-separated parts) → 400
+
+3. **Caller Authentication Before SignOut**
+   - Calls `supabaseClient.auth.getUser()` to verify token validity
+   - Only proceeds to `signOut()` if user is authenticated
+   - Binds logout to caller's own session (not arbitrary tokens)
+
+4. **Proper Cookie Clearing**
+   - Uses separate `Set-Cookie` headers via `headers.append()`
+   - Sets secure attributes: `HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+   - Clears all auth cookies: `sb-session`, `sb-csrf`, `sb-access-token`, `sb-refresh-token`
+
+**Testing:**
+- Unit tests in `header_injection_test.ts` validate all attack vectors
+- Integration tests verify cookie parsing removal
+- Manual curl tests confirm CRLF rejection and authentication enforcement
+
+**Documentation:**
+- `HEADER_INJECTION_FIX.md` details the vulnerability, fixes, and prevention
+
+### Key Takeaway
+> The endpoint is now hardened against header injection and cannot be used as an authorization proxy. All logout operations require a valid, authenticated Bearer token.
+
+---
+
+## 🔐 Fix #3: In-Memory Session Storage
 
 ### ⚠️ Important Changes
 
