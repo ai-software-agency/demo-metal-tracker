@@ -1,9 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Coins, TrendingUp, Shield, User } from "lucide-react";
+import { useAuth } from "@/auth/AuthContext";
 
 type TabKey = "spot-prices" | "futures" | "vulnerabilities" | "admin";
 
 export const Header = ({ currentTab, onSelect }: { currentTab: TabKey; onSelect: (tab: TabKey) => void }) => {
+  const { isAuthenticated, isAdmin } = useAuth();
+  
+  // Only show admin tab to authenticated admin users
+  const canViewAdmin = isAuthenticated && isAdmin;
+
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4">
@@ -39,12 +45,14 @@ export const Header = ({ currentTab, onSelect }: { currentTab: TabKey; onSelect:
                 Vulnerabilities
               </div>
             </Button>
-            <Button variant={currentTab === "admin" ? "default" : "ghost"} size="sm" onClick={() => onSelect("admin")}>
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Admin
-              </div>
-            </Button>
+            {canViewAdmin && (
+              <Button variant={currentTab === "admin" ? "default" : "ghost"} size="sm" onClick={() => onSelect("admin")}>
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Admin
+                </div>
+              </Button>
+            )}
           </nav>
         </div>
       </div>
