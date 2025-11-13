@@ -89,7 +89,13 @@ export function getClientEnv(): SupabaseClientEnv {
   if (!url || url.includes('<your-project-ref>') || url === '') {
     const message = 'VITE_SUPABASE_URL is not configured';
     if (isDev) {
-      throw new Error(`${message}. Copy .env.example to .env and configure your Supabase credentials.`);
+      console.warn(`${message}. The environment variables should be auto-managed by Lovable Cloud.`);
+      // In Lovable Cloud, allow the app to continue even if env vars aren't loaded yet
+      return {
+        url: '',
+        anonKey: '',
+        projectId: '',
+      };
     }
     throw new Error('Application configuration error');
   }
@@ -98,7 +104,13 @@ export function getClientEnv(): SupabaseClientEnv {
   if (!projectId || projectId.includes('<your-project-ref>') || projectId === '') {
     const message = 'VITE_SUPABASE_PROJECT_ID is not configured';
     if (isDev) {
-      throw new Error(`${message}. Copy .env.example to .env and configure your Supabase credentials.`);
+      console.warn(`${message}. The environment variables should be auto-managed by Lovable Cloud.`);
+      // In Lovable Cloud, allow the app to continue even if env vars aren't loaded yet
+      return {
+        url: '',
+        anonKey: '',
+        projectId: '',
+      };
     }
     throw new Error('Application configuration error');
   }
