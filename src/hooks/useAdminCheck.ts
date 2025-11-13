@@ -52,6 +52,12 @@ export const useAdminCheck = () => {
       if (error) {
         console.error('Error checking admin status:', error);
         setIsAdmin(false);
+      } else if (data?.mfa_required) {
+        // Step-up authentication required (MFA or recent auth)
+        console.warn('Admin access requires step-up authentication:', data.reason);
+        setIsAdmin(false);
+        // TODO: Implement MFA challenge flow in the application
+        // For now, we just deny admin access
       } else {
         setIsAdmin(data?.isAdmin || false);
       }
