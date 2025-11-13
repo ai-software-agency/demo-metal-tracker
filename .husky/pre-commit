@@ -6,18 +6,33 @@
 
 echo "🔒 Running secret scan on staged files..."
 
-# Get list of staged files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-if [ -z "$STAGED_FILES" ]; then
+# Check if there are any staged files (null-delimited check)
+if ! git diff --cached --name-only --diff-filter=ACM -z | grep -qz .; then
   echo "✓ No files staged, skipping secret scan"
   exit 0
 fi
 
-# Run Secretlint on staged files
-npx secretlint $STAGED_FILES
+# SECURITY: Use null-delimited input (-z) and xargs -0 to safely pass filenames to Secretlint.
+# This prevents:
+# - Option injection (filenames starting with -, e.g., --config=malicious)
+# - Word splitting (filenames with spaces)
+# - Glob expansion (filenames with wildcards like *, ?)
+# The -- after secretlint ensures all arguments are treated as filenames, not options.
 
-if [ $? -ne 0 ]; then
+# Detect if xargs supports -r (run only if input is non-empty; GNU extension)
+if echo | xargs -r true >/dev/null 2>&1; then
+  XR=-r
+else
+  XR=
+fi
+
+# Run Secretlint with safe argument passing
+git diff --cached --name-only --diff-filter=ACM -z | xargs -0 ${XR} npx secretlint --
+
+# Capture exit code
+SECRETLINT_EXIT=$?
+
+if [ $SECRETLINT_EXIT -ne 0 ]; then
   echo ""
   echo "❌ SECRET DETECTED! Commit blocked."
   echo ""
