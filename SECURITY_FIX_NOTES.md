@@ -4,18 +4,22 @@ This document tracks security fixes and hardening measures applied to this Lovab
 
 ---
 
-## 🔐 Fix #1: Hardcoded Credentials (Lovable Cloud Context)
+## 🔐 Fix #1: Hardcoded Credentials - RESOLVED
 
-### Issue: `.env` File in Repository
-Automated security scans detected Supabase credentials committed in the `.env` file.
+### Issue: `.env` File Committed to Repository
+Automated security scans detected Supabase credentials committed in the `.env` file, which could be extracted from VCS history.
 
-### Resolution: **Not a Vulnerability in Lovable Cloud**
+### Resolution: **Removed + Auto-Management**
 
-This project uses **Lovable Cloud**, where `.env` is **auto-managed by the platform**:
-- ✅ The file is **regenerated automatically** - manual edits are overwritten
-- ✅ The `VITE_SUPABASE_PUBLISHABLE_KEY` is a **public key by design** (anon role)
-- ✅ Security relies on **Row Level Security (RLS) policies**, not hiding the anon key
-- ✅ Service role keys are **never exposed client-side** (managed server-side only)
+**Actions Taken:**
+- ✅ **Deleted `.env` from repository** - Committed credentials removed
+- ✅ **Lovable Cloud auto-regenerates** - File created outside Git tracking
+- ✅ **Multi-layer validation** - Runtime guards + pre-commit scanning
+
+**Lovable Cloud Context:**
+- The `VITE_SUPABASE_PUBLISHABLE_KEY` is a **public key by design** (anon role)
+- Security relies on **Row Level Security (RLS) policies**, not hiding the anon key
+- Service role keys are **never exposed client-side** (managed server-side only)
 
 ### Why Client Exposure is Expected
 The `VITE_*` prefix means Vite **embeds these values in the browser bundle**:
