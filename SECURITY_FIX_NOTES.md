@@ -1,6 +1,58 @@
-# Security Fix: In-Memory Session Storage
+# Security Hardening Summary
 
-## ⚠️ Important Changes
+This document tracks security fixes and hardening measures applied to this Lovable Cloud project.
+
+---
+
+## 🔐 Fix #1: Hardcoded Credentials (Lovable Cloud Context)
+
+### Issue: `.env` File in Repository
+Automated security scans detected Supabase credentials committed in the `.env` file.
+
+### Resolution: **Not a Vulnerability in Lovable Cloud**
+
+This project uses **Lovable Cloud**, where `.env` is **auto-managed by the platform**:
+- ✅ The file is **regenerated automatically** - manual edits are overwritten
+- ✅ The `VITE_SUPABASE_PUBLISHABLE_KEY` is a **public key by design** (anon role)
+- ✅ Security relies on **Row Level Security (RLS) policies**, not hiding the anon key
+- ✅ Service role keys are **never exposed client-side** (managed server-side only)
+
+### Why Client Exposure is Expected
+The `VITE_*` prefix means Vite **embeds these values in the browser bundle**:
+- This is intentional for the anon (publishable) key
+- The key has limited permissions enforced by RLS
+- Similar to Stripe publishable keys (`pk_*`), Firebase API keys, etc.
+
+### Defense-in-Depth Measures Implemented
+
+1. **Runtime Environment Validation** (`src/lib/safeEnv.ts`)
+   - Decodes JWT to verify role is `anon`, not `service_role`
+   - Rejects placeholder values in production
+   - Fails fast on misconfigurations
+
+2. **Pre-Commit Secret Scanning** (`.husky/pre-commit`)
+   - Uses Secretlint to scan staged files
+   - Hardened against option injection (null-delimited filenames)
+   - Configured to **ignore** `.env` (Lovable Cloud managed)
+
+3. **Repository-Wide Scanner** (`scripts/scan-secrets.js`)
+   - Detects JWT tokens, API keys in tracked files
+   - **Excludes** `.env` by design
+   - Ready for CI/CD integration
+
+4. **Comprehensive Documentation**
+   - `SECURITY.md` - Security policy and RLS best practices
+   - `README_SECURITY.md` - Environment handling guide
+   - `SECURITY_FIX_CREDENTIALS.md` - Credential protection details
+
+### Key Takeaway
+> The anon key in `.env` is **not a vulnerability**. Security is enforced through **RLS policies** and **server-side validation**, not secret management of the publishable key.
+
+---
+
+## 🔐 Fix #2: In-Memory Session Storage
+
+### ⚠️ Important Changes
 
 This project has been hardened against XSS-based token theft by replacing localStorage session storage with ephemeral in-memory storage.
 
